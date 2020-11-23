@@ -56,6 +56,7 @@ unsigned char USART_Receive(void)
 	return UDR0;// lê o dado e retorna 
 }
 
+// variaveis de controle dos if e PWM
 int i = 0;
 int test = 1;
 
@@ -64,10 +65,10 @@ int main(void)
 {
 	
 	//Portas GPIO
-	DDRD = 0b01000000; // todos os pinos da porta D como entrada, somente o 6 como saida
-	DDRC = 0b00100001; // como modo de saida 
-	PORTD= 0b00000100;
-	PORTC = 0x00; // so C0 em baixo nivel
+	DDRD = 0b01000001; // todos os pinos da porta D como entrada, somente o 6 e o 0 como saida
+	DDRC = 0b01100001; // pinos 6 , 5 e 0 como saida
+	PORTD= 0b00000100;// GPIO para interrupção Pino D2
+	PORTC = 0x00; //todos com nivel baixo 
 	
 	//configuração das interrupções
 	EICRA = 0b00000010;	// configurando como borda de descida
@@ -85,26 +86,17 @@ int main(void)
 	ADCSRB = 0x00;// conversão continua
 	DIDR0 = 0b00111110;// habilita o PC0 como entrada do ADC0
 	
-	sei();
-	// USART
-	USART_Init(MYUBRR);
+	sei();//Habilita interrupção Global 
+	
+	USART_Init(MYUBRR);// Inicializa o protocolo USART
    
     while (1) 
     {
-		
+		// trava o display 
 		if (test == 1)
 		{
-
 			nokia_lcd_init();
 			nokia_lcd_clear();
-			nokia_lcd_write_string("Meu Escritorio",1);
-			nokia_lcd_set_cursor(0, 10);
-			nokia_lcd_write_string("*------------*", 1);
-			nokia_lcd_set_cursor(0, 20);
-			nokia_lcd_write_string("-L. Escritorio", 1);
-			nokia_lcd_set_cursor(0, 30);
-			nokia_lcd_write_string("-Sala de maquinas", 1);
-			nokia_lcd_set_cursor(0,40);
 			nokia_lcd_render();
 			test = 0;
 		}
@@ -112,7 +104,9 @@ int main(void)
 		//Calculo do sensor LM35 Vout = 0.01 * T ;
 		
 		Celsius = (leitura_ADC/1023.0)*100;
-
+		
+		
+		// monitoramento da temperatura em tempo real 
 		nokia_lcd_clear();
 		int_to_str(Celsius, leitura_ADC_string);
 		nokia_lcd_write_string("Monitoramento ",1);
@@ -127,20 +121,23 @@ int main(void)
 		nokia_lcd_render();
 		_delay_ms(1000);
 		
+		//condição de acionamento do motor 
 		if (Celsius <=70)
 		{
 			PORTC = 0b00000000;
 			
 		}
+		
 		else
 		{
 			PORTC = 0b00100000;
+	
 		}	
 		
     }
 }
 
-//Função para o display
+//Função para o display 
 void int_to_str(uint16_t s, unsigned char *d)
 {
 	uint8_t n = tam_vetor - 2;
@@ -165,11 +162,34 @@ ISR(INT0_vect) //Sensor de presença
 	test = 1;
 }
 
+//Protocolo Usart para definição de luminosidade da lampada
 ISR(USART_RX_vect)
 {
 		char recebido;
 		recebido = UDR0;
 		
+		if (recebido == 'l')
+		{
+			PORTD = 0b00000001;
+			nokia_lcd_init();
+			nokia_lcd_clear();
+			nokia_lcd_write_string("Lamp. das Maquinas:ligada",1);
+			nokia_lcd_set_cursor(0, 10);
+			nokia_lcd_render();
+			_delay_ms(2000);
+			test = 1;
+		}
+		if (recebido == 'd')
+		{
+			PORTD = 0b00000000;
+			nokia_lcd_init();
+			nokia_lcd_clear();
+			nokia_lcd_write_string("Lamp. das Maquinas:desligada",1);
+			nokia_lcd_set_cursor(0, 10);
+			nokia_lcd_render();
+			_delay_ms(2000);
+			test=1;
+		}
 		
 		if(recebido == '0')
 		{
